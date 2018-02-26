@@ -52,6 +52,26 @@ def report_warning(env, msg, docname, lineno=None):
 # Declare new node types (based on others): Item, ItemList, ItemMatrix, ItemTree
 
 
+class ItemElement(nodes.General, nodes.Element):
+
+    def create_top_node(title):
+        '''
+        Create the top node for the Element node
+
+        An admonition object with given title is created and returns
+        Args:
+            - title (str): Title of the top node
+        Returns: Top level replacement node to which other nodes can be appended
+        '''
+        top_node = nodes.container()
+        admon_node = nodes.admonition()
+        title_node = nodes.title()
+        title_node += nodes.Text(title)
+        admon_node += title_node
+        top_node += admon_node
+        return top_node
+
+
 class Item(nodes.General, nodes.Element):
     '''Documentation item'''
     pass
@@ -59,7 +79,25 @@ class Item(nodes.General, nodes.Element):
 
 class ItemList(nodes.General, nodes.Element):
     '''List of documentation items'''
-    pass
+
+    def perform_traceability_replacement(self, collection):
+        '''
+        Perform the node replacement
+
+        Args:
+            - collection (TraceableCollection): Collection for which to generate the list of items
+        '''
+        item_ids = collection.get_items(self['filter'])
+        top_node = create_top_node(self['title'])
+        ul_node = nodes.bullet_list()
+        for i in item_ids:
+            bullet_list_item = nodes.list_item()
+            p_node = nodes.paragraph()
+            p_node.append(make_internal_item_ref(self['app'], self, self['docname'], i))
+            bullet_list_item.append(p_node)
+            ul_node.append(bullet_list_item)
+        top_node += ul_node
+        self.replace_self(top_node)
 
 
 class ItemMatrix(nodes.General, nodes.Element):
@@ -194,7 +232,11 @@ class ItemListDirective(Directive):
     has_content = False
 
     def run(self):
+        env = self.state.document.settings.env
         item_list_node = ItemList('')
+        item_list_node['app'] = env.app
+        item_list_node['document'] = env.docname
+        item_list_node['line'] = self.lineno
 
         # Process title (optional argument)
         if len(self.arguments) > 0:
@@ -589,17 +631,7 @@ def process_item_nodes(app, doctree, fromdocname):
     # Create list with target references. Only items matching list regexp
     # shall be included
     for node in doctree.traverse(ItemList):
-        item_ids = env.traceability_collection.get_items(node['filter'])
-        top_node = create_top_node(node['title'])
-        ul_node = nodes.bullet_list()
-        for i in item_ids:
-            bullet_list_item = nodes.list_item()
-            p_node = nodes.paragraph()
-            p_node.append(make_internal_item_ref(app, node, fromdocname, i))
-            bullet_list_item.append(p_node)
-            ul_node.append(bullet_list_item)
-        top_node += ul_node
-        node.replace_self(top_node)
+        node.perform_traceability_replacement(env.traceability_collection)
 
     # Item tree:
     # Create list with target references. Only items matching list regexp
