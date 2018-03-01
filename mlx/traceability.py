@@ -19,6 +19,7 @@ from docutils.utils import get_source_line
 from mlx.traceable_item import TraceableItem
 from mlx.traceable_collection import TraceableCollection
 from mlx.traceability_exception import TraceabilityException, MultipleTraceabilityExceptions
+from setuptools_scm import get_version
 from sphinx import __version__ as sphinx_version
 if sphinx_version >= '1.6.0':
     from sphinx.util.logging import getLogger
@@ -962,3 +963,5 @@ def setup(app):
     app.add_role('item', XRefRole(nodeclass=PendingItemXref,
                                   innernodeclass=nodes.emphasis,
                                   warn_dangling=True))
+
+    return {'version': get_version()}
