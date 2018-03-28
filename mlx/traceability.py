@@ -54,6 +54,7 @@ def report_warning(env, msg, docname, lineno=None):
 
 class ItemElement(nodes.General, nodes.Element):
 
+    @staticmethod
     def create_top_node(title):
         '''
         Create the top node for the Element node
@@ -77,24 +78,25 @@ class Item(nodes.General, nodes.Element):
     pass
 
 
-class ItemList(nodes.General, nodes.Element):
+class ItemList(ItemElement):
     '''List of documentation items'''
 
-    def perform_traceability_replacement(self, collection):
+    def perform_traceability_replacement(self, app, collection):
         '''
         Perform the node replacement
 
         Args:
+            - app: sphinx application object to use
             - collection (TraceableCollection): Collection for which to generate the list of items
         '''
         item_ids = collection.get_items(self['filter'])
         showcaptions = not self['nocaptions']
-        top_node = create_top_node(self['title'])
+        top_node = self.create_top_node(self['title'])
         ul_node = nodes.bullet_list()
         for i in item_ids:
             bullet_list_item = nodes.list_item()
             p_node = nodes.paragraph()
-            p_node.append(make_internal_item_ref(self['app'], self, self['docname'], i, showcaptions))
+            p_node.append(make_internal_item_ref(app, self, self['document'], i, showcaptions))
             bullet_list_item.append(p_node)
             ul_node.append(bullet_list_item)
         top_node += ul_node
@@ -111,24 +113,25 @@ class Item2DMatrix(nodes.General, nodes.Element):
     pass
 
 
-class ItemTree(nodes.General, nodes.Element):
+class ItemTree(ItemElement):
     '''Tree-view on documentation items'''
 
-    def perform_traceability_replacement(self, collection):
+    def perform_traceability_replacement(self, app, collection):
         '''
         Perform the node replacement
 
         Args:
+            - app: sphinx application object to use
             - collection (TraceableCollection): Collection for which to generate the tree of items
         '''
         top_item_ids = collection.get_items(self['top'])
         showcaptions = not self['nocaptions']
-        top_node = create_top_node(self['title'])
+        top_node = self.create_top_node(self['title'])
         ul_node = nodes.bullet_list()
         ul_node.set_class('bonsai')
         for i in top_item_ids:
-            if is_item_top_level(self['env'], i, self['top'], self['top_relation_filter']):
-                ul_node.append(generate_bullet_list_tree(self['app'], self['env'], self, self['docname'], i, showcaptions))
+            if is_item_top_level(app.env, i, self['top'], self['top_relation_filter']):
+                ul_node.append(generate_bullet_list_tree(app, app.env, self, self['document'], i, showcaptions))
         top_node += ul_node
         self.replace_self(top_node)
 
@@ -265,9 +268,7 @@ class ItemListDirective(Directive):
         env = self.state.document.settings.env
         app = env.app
 
-        item_list_node = ItemList('')
-        item_list_node['env'] = env
-        item_list_node['app'] = app
+        item_list_node = ItemList()
         item_list_node['document'] = env.docname
         item_list_node['line'] = self.lineno
 
@@ -489,9 +490,7 @@ class ItemTreeDirective(Directive):
         env = self.state.document.settings.env
         app = env.app
 
-        item_tree_node = ItemTree('')
-        item_tree_node['env'] = env
-        item_tree_node['app'] = app
+        item_tree_node = ItemTree()
         item_tree_node['document'] = env.docname
         item_tree_node['line'] = self.lineno
 
@@ -699,13 +698,13 @@ def process_item_nodes(app, doctree, fromdocname):
     # Create list with target references. Only items matching list regexp
     # shall be included
     for node in doctree.traverse(ItemList):
-        node.perform_traceability_replacement(env.traceability_collection)
+        node.perform_traceability_replacement(app, env.traceability_collection)
 
     # Item tree:
     # Create list with target references. Only items matching list regexp
     # shall be included
     for node in doctree.traverse(ItemTree):
-        node.perform_traceability_replacement(env.traceability_collection)
+        node.perform_traceability_replacement(app, env.traceability_collection)
 
     # Resolve item cross references (from ``item`` role)
     for node in doctree.traverse(PendingItemXref):
