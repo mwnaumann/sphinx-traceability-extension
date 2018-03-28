@@ -72,6 +72,16 @@ class ItemElement(nodes.General, nodes.Element):
         top_node += admon_node
         return top_node
 
+    def perform_traceability_replacement(self, app, collection):
+        '''
+        Perform the node replacement
+
+        Args:
+            - app: sphinx application object to use
+            - collection (TraceableCollection): Collection for which to generate the nodes
+        '''
+        pass
+
 
 class Item(nodes.General, nodes.Element):
     '''Documentation item'''
