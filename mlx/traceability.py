@@ -830,16 +830,6 @@ def process_item_nodes(app, doctree, fromdocname):
         node.perform_traceability_replacement(app, env.traceability_collection)
 
 
-def create_top_node(title):
-    top_node = nodes.container()
-    admon_node = nodes.admonition()
-    title_node = nodes.title()
-    title_node += nodes.Text(title)
-    admon_node += title_node
-    top_node += admon_node
-    return top_node
-
-
 def init_available_relationships(app):
     """
     Update directive option_spec with custom relationships defined in
