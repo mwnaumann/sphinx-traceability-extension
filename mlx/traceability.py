@@ -89,7 +89,11 @@ class Item(nodes.General, nodes.Element):
 
 
 class ItemList(ItemElement):
-    '''List of documentation items'''
+    '''
+    List of documentation items
+
+    Create list with target references. Only items matching list regexp shall be included
+    '''
 
     def perform_traceability_replacement(self, app, collection):
         '''
@@ -97,7 +101,7 @@ class ItemList(ItemElement):
 
         Args:
             - app: sphinx application object to use
-            - collection (TraceableCollection): Collection for which to generate the list of items
+            - collection (TraceableCollection): Collection for which to generate the nodes
         '''
         item_ids = collection.get_items(self['filter'])
         showcaptions = not self['nocaptions']
@@ -113,9 +117,84 @@ class ItemList(ItemElement):
         self.replace_self(top_node)
 
 
-class ItemMatrix(nodes.General, nodes.Element):
-    '''Matrix for cross referencing documentation items'''
-    pass
+class ItemMatrix(ItemElement):
+    '''
+    Matrix for cross referencing documentation items
+
+    Creates table with related items, printing their target references.
+    Only source and target items matching respective regexp shall be included
+    '''
+
+    def perform_traceability_replacement(self, app, collection):
+        '''
+        Perform the node replacement
+
+        Args:
+            - app: sphinx application object to use
+            - collection (TraceableCollection): Collection for which to generate the nodes
+        '''
+        showcaptions = not self['nocaptions']
+        source_ids = collection.get_items(self['source'])
+        target_ids = collection.get_items(self['target'])
+        top_node = self.create_top_node(self['title'])
+        table = nodes.table()
+        tgroup = nodes.tgroup()
+        left_colspec = nodes.colspec(colwidth=5)
+        right_colspec = nodes.colspec(colwidth=5)
+        tgroup += [left_colspec, right_colspec]
+        tgroup += nodes.thead('', nodes.row(
+            '',
+            nodes.entry('', nodes.paragraph('', self['sourcetitle'])),
+            nodes.entry('', nodes.paragraph('', self['targettitle']))))
+        tbody = nodes.tbody()
+        tgroup += tbody
+        table += tgroup
+
+        relationships = self['type']
+        if not relationships:
+            relationships = collection.iter_relations()
+
+        count_total = 0
+        count_covered = 0
+
+        for source_id in source_ids:
+            source_item = collection.get_item(source_id)
+            count_total += 1
+            covered = False
+            row = nodes.row()
+            left = nodes.entry()
+            left += make_internal_item_ref(app, self, self['document'], source_id, showcaptions)
+            right = nodes.entry()
+            for relationship in relationships:
+                if REGEXP_EXTERNAL_RELATIONSHIP.search(relationship):
+                    for target_id in source_item.iter_targets(relationship):
+                        right += make_external_item_ref(app, target_id, relationship)
+                        covered = True
+            for target_id in target_ids:
+                if collection.are_related(source_id, relationships, target_id):
+                    right += make_internal_item_ref(app, self, self['document'], target_id, showcaptions)
+                    covered = True
+            if covered:
+                count_covered += 1
+            row += left
+            row += right
+            tbody += row
+
+        try:
+            percentage = int(100 * count_covered / count_total)
+        except ZeroDivisionError:
+            percentage = 0
+        disp = 'Statistics: {cover} out of {total} covered: {pct}%'.format(cover=count_covered,
+                                                                           total=count_total,
+                                                                           pct=percentage)
+        if self['stats']:
+            p_node = nodes.paragraph()
+            txt = nodes.Text(disp)
+            p_node += txt
+            top_node += p_node
+
+        top_node += table
+        self.replace_self(top_node)
 
 
 class Item2DMatrix(nodes.General, nodes.Element):
@@ -124,7 +203,9 @@ class Item2DMatrix(nodes.General, nodes.Element):
 
 
 class ItemTree(ItemElement):
-    '''Tree-view on documentation items'''
+    '''
+    Tree-view on documentation items
+    '''
 
     def perform_traceability_replacement(self, app, collection):
         '''
@@ -341,7 +422,9 @@ class ItemMatrixDirective(Directive):
         env = self.state.document.settings.env
         app = env.app
 
-        item_matrix_node = ItemMatrix('')
+        item_matrix_node = ItemMatrix()
+        item_matrix_node['document'] = env.docname
+        item_matrix_node['line'] = self.lineno
 
         # Process title (optional argument)
         if len(self.arguments) > 0:
@@ -586,10 +669,6 @@ def perform_consistency_check(app, doctree):
 def process_item_nodes(app, doctree, fromdocname):
     """
     This function should be triggered upon ``doctree-resolved event``
-
-    Replace all ItemList nodes with a list of the collected items.
-    Augment each item with a backlink to the original location.
-
     """
     env = app.builder.env
 
@@ -602,72 +681,8 @@ def process_item_nodes(app, doctree, fromdocname):
             for err in errs.iter():
                 report_warning(env, err, err.get_document())
 
-    # Item matrix:
-    # Create table with related items, printing their target references.
-    # Only source and target items matching respective regexp shall be included
     for node in doctree.traverse(ItemMatrix):
-        showcaptions = not node['nocaptions']
-        source_ids = env.traceability_collection.get_items(node['source'])
-        target_ids = env.traceability_collection.get_items(node['target'])
-        top_node = create_top_node(node['title'])
-        table = nodes.table()
-        tgroup = nodes.tgroup()
-        left_colspec = nodes.colspec(colwidth=5)
-        right_colspec = nodes.colspec(colwidth=5)
-        tgroup += [left_colspec, right_colspec]
-        tgroup += nodes.thead('', nodes.row(
-            '',
-            nodes.entry('', nodes.paragraph('', node['sourcetitle'])),
-            nodes.entry('', nodes.paragraph('', node['targettitle']))))
-        tbody = nodes.tbody()
-        tgroup += tbody
-        table += tgroup
-
-        relationships = node['type']
-        if not relationships:
-            relationships = env.traceability_collection.iter_relations()
-
-        count_total = 0
-        count_covered = 0
-
-        for source_id in source_ids:
-            source_item = env.traceability_collection.get_item(source_id)
-            count_total += 1
-            covered = False
-            row = nodes.row()
-            left = nodes.entry()
-            left += make_internal_item_ref(app, node, fromdocname, source_id, showcaptions)
-            right = nodes.entry()
-            for relationship in relationships:
-                if REGEXP_EXTERNAL_RELATIONSHIP.search(relationship):
-                    for target_id in source_item.iter_targets(relationship):
-                        right += make_external_item_ref(app, target_id, relationship)
-                        covered = True
-            for target_id in target_ids:
-                if env.traceability_collection.are_related(source_id, relationships, target_id):
-                    right += make_internal_item_ref(app, node, fromdocname, target_id, showcaptions)
-                    covered = True
-            if covered:
-                count_covered += 1
-            row += left
-            row += right
-            tbody += row
-
-        try:
-            percentage = int(100 * count_covered / count_total)
-        except ZeroDivisionError:
-            percentage = 0
-        disp = 'Statistics: {cover} out of {total} covered: {pct}%'.format(cover=count_covered,
-                                                                           total=count_total,
-                                                                           pct=percentage)
-        if node['stats']:
-            p_node = nodes.paragraph()
-            txt = nodes.Text(disp)
-            p_node += txt
-            top_node += p_node
-
-        top_node += table
-        node.replace_self(top_node)
+        node.perform_traceability_replacement(app, env.traceability_collection)
 
     # Item 2D matrix:
     # Create table with related items, printing their target references.
@@ -708,15 +723,9 @@ def process_item_nodes(app, doctree, fromdocname):
         top_node += table
         node.replace_self(top_node)
 
-    # Item list:
-    # Create list with target references. Only items matching list regexp
-    # shall be included
     for node in doctree.traverse(ItemList):
         node.perform_traceability_replacement(app, env.traceability_collection)
 
-    # Item tree:
-    # Create list with target references. Only items matching list regexp
-    # shall be included
     for node in doctree.traverse(ItemTree):
         node.perform_traceability_replacement(app, env.traceability_collection)
 
