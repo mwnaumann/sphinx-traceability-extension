@@ -327,7 +327,46 @@ class PendingItemXref(nodes.Inline, ItemElement):
     complete information about all documents.
 
     """
-    pass
+
+    def perform_traceability_replacement(self, app, collection, fromdocname):
+        '''
+        Perform the node replacement
+
+        Args:
+            - app: sphinx application object to use
+            - collection (TraceableCollection): Collection for which to generate the tree of items
+        '''
+        # Create a dummy reference to be used if target reference fails
+        new_node = make_refnode(app.builder,
+                                fromdocname,
+                                fromdocname,
+                                'ITEM_NOT_FOUND',
+                                self[0].deepcopy(),
+                                self['reftarget'] + '??')
+        # If target exists, try to create the reference
+        item_info = collection.get_item(self['reftarget'])
+        docname, lineno = get_source_line(self)
+        if item_info:
+            if item_info.is_placeholder():
+                report_warning(app.env, 'Traceability: cannot link to %s, item is not defined' % item_info.get_id(),
+                               docname, lineno)
+            else:
+                try:
+                    new_node = make_refnode(app.builder,
+                                            fromdocname,
+                                            item_info.docname,
+                                            item_info.node['refid'],
+                                            self[0].deepcopy(),
+                                            self['reftarget'])
+                except NoUri:
+                    # ignore if no URI can be determined, e.g. for LaTeX output :(
+                    pass
+
+        else:
+            report_warning(app.env, 'Traceability: item %s not found' % self['reftarget'],
+                           docname, lineno)
+
+        self.replace_self(new_node)
 
 
 # -----------------------------------------------------------------------------
@@ -787,40 +826,8 @@ def process_item_nodes(app, doctree, fromdocname):
     for node in doctree.traverse(ItemTree):
         node.perform_traceability_replacement(app, env.traceability_collection)
 
-    # Resolve item cross references (from ``item`` role)
     for node in doctree.traverse(PendingItemXref):
-        # Create a dummy reference to be used if target reference fails
-        new_node = make_refnode(app.builder,
-                                fromdocname,
-                                fromdocname,
-                                'ITEM_NOT_FOUND',
-                                node[0].deepcopy(),
-                                node['reftarget'] + '??')
-        # If target exists, try to create the reference
-        item_info = env.traceability_collection.get_item(node['reftarget'])
-        if item_info:
-            if item_info.is_placeholder():
-                docname, lineno = get_source_line(node)
-                report_warning(env, 'Traceability: cannot link to %s, item is not defined' % item_info.get_id(),
-                               docname, lineno)
-            else:
-                try:
-                    new_node = make_refnode(app.builder,
-                                            fromdocname,
-                                            item_info.docname,
-                                            item_info.node['refid'],
-                                            node[0].deepcopy(),
-                                            node['reftarget'])
-                except NoUri:
-                    # ignore if no URI can be determined, e.g. for LaTeX output :(
-                    pass
-
-        else:
-            docname, lineno = get_source_line(node)
-            report_warning(env, 'Traceability: item %s not found' % node['reftarget'],
-                           docname, lineno)
-
-        node.replace_self(new_node)
+        node.perform_traceability_replacement(app, env.traceability_collection, fromdocname)
 
     for node in doctree.traverse(Item):
         node.perform_traceability_replacement(app, env.traceability_collection)
