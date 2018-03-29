@@ -83,9 +83,56 @@ class ItemElement(nodes.General, nodes.Element):
         pass
 
 
-class Item(nodes.General, nodes.Element):
-    '''Documentation item'''
-    pass
+class Item(ItemElement):
+    '''
+    Documentation item
+
+    Replace item nodes, with admonition, list of relationships
+    '''
+
+    def perform_traceability_replacement(self, app, collection):
+        '''
+        Perform the node replacement
+
+        Args:
+            - app: sphinx application object to use
+            - collection (TraceableCollection): Collection for which to generate the nodes
+        '''
+        currentitem = collection.get_item(self['id'])
+        showcaptions = not self['nocaptions']
+        header = currentitem.get_id()
+        if currentitem.caption:
+            header += ' : ' + currentitem.caption
+        top_node = self.create_top_node(header)
+        if app.config.traceability_render_relationship_per_item:
+            par_node = nodes.paragraph()
+            dl_node = nodes.definition_list()
+            for rel in collection.iter_relations():
+                tgts = currentitem.iter_targets(rel)
+                if tgts:
+                    li_node = nodes.definition_list_item()
+                    dt_node = nodes.term()
+                    if rel in app.config.traceability_relationship_to_string:
+                        relstr = app.config.traceability_relationship_to_string[rel]
+                    else:
+                        continue
+                    txt = nodes.Text(relstr)
+                    dt_node.append(txt)
+                    li_node.append(dt_node)
+                    for tgt in tgts:
+                        dd_node = nodes.definition()
+                        p_node = nodes.paragraph()
+                        if REGEXP_EXTERNAL_RELATIONSHIP.search(rel):
+                            link = make_external_item_ref(app, tgt, rel)
+                        else:
+                            link = make_internal_item_ref(app, self, self['document'], tgt, showcaptions)
+                        p_node.append(link)
+                        dd_node.append(p_node)
+                        li_node.append(dd_node)
+                    dl_node.append(li_node)
+            par_node.append(dl_node)
+            top_node.append(par_node)
+        self.replace_self(top_node)
 
 
 class ItemList(ItemElement):
@@ -333,7 +380,9 @@ class ItemDirective(Directive):
         targetid = self.arguments[0]
         targetnode = nodes.target('', '', ids=[targetid])
 
-        itemnode = Item('')
+        itemnode = Item()
+        itemnode['document'] = env.docname
+        itemnode['line'] = self.lineno
         itemnode['id'] = targetid
 
         # Item caption is the text following the mandatory id argument.
@@ -777,44 +826,8 @@ def process_item_nodes(app, doctree, fromdocname):
 
         node.replace_self(new_node)
 
-    # Item: replace item nodes, with admonition, list of relationships
     for node in doctree.traverse(Item):
-        currentitem = env.traceability_collection.get_item(node['id'])
-        showcaptions = not node['nocaptions']
-        header = currentitem.get_id()
-        if currentitem.caption:
-            header += ' : ' + currentitem.caption
-        top_node = create_top_node(header)
-        if app.config.traceability_render_relationship_per_item:
-            par_node = nodes.paragraph()
-            dl_node = nodes.definition_list()
-            for rel in env.traceability_collection.iter_relations():
-                tgts = currentitem.iter_targets(rel)
-                if tgts:
-                    li_node = nodes.definition_list_item()
-                    dt_node = nodes.term()
-                    if rel in app.config.traceability_relationship_to_string:
-                        relstr = app.config.traceability_relationship_to_string[rel]
-                    else:
-                        continue
-                    txt = nodes.Text(relstr)
-                    dt_node.append(txt)
-                    li_node.append(dt_node)
-                    for tgt in tgts:
-                        dd_node = nodes.definition()
-                        p_node = nodes.paragraph()
-                        if REGEXP_EXTERNAL_RELATIONSHIP.search(rel):
-                            link = make_external_item_ref(app, tgt, rel)
-                        else:
-                            link = make_internal_item_ref(app, node, fromdocname, tgt, showcaptions)
-                        p_node.append(link)
-                        dd_node.append(p_node)
-                        li_node.append(dd_node)
-                    dl_node.append(li_node)
-            par_node.append(dl_node)
-            top_node.append(par_node)
-        # Note: content should be displayed during read of RST file, as it contains other RST objects
-        node.replace_self(top_node)
+        node.perform_traceability_replacement(app, env.traceability_collection)
 
 
 def create_top_node(title):
