@@ -52,7 +52,7 @@ def report_warning(env, msg, docname=None, lineno=None):
 # Declare new node types (based on others): Item, ItemList, ItemMatrix, ItemTree
 
 
-class ItemElement(nodes.General, nodes.Element):
+class ItemElement(nodes.Element):
 
     @staticmethod
     def create_top_node(title):
@@ -83,7 +83,7 @@ class ItemElement(nodes.General, nodes.Element):
         pass
 
 
-class Item(ItemElement):
+class Item(nodes.General, ItemElement):
     '''
     Documentation item
 
@@ -135,7 +135,7 @@ class Item(ItemElement):
         self.replace_self(top_node)
 
 
-class ItemList(ItemElement):
+class ItemList(nodes.General, ItemElement):
     '''
     List of documentation items
 
@@ -164,7 +164,7 @@ class ItemList(ItemElement):
         self.replace_self(top_node)
 
 
-class ItemMatrix(ItemElement):
+class ItemMatrix(nodes.General, ItemElement):
     '''
     Matrix for cross referencing documentation items
 
@@ -244,7 +244,7 @@ class ItemMatrix(ItemElement):
         self.replace_self(top_node)
 
 
-class Item2DMatrix(ItemElement):
+class Item2DMatrix(nodes.General, ItemElement):
     '''
     Matrix for cross referencing documentation items in 2 dimensions
 
@@ -296,7 +296,7 @@ class Item2DMatrix(ItemElement):
         self.replace_self(top_node)
 
 
-class ItemTree(ItemElement):
+class ItemTree(nodes.General, ItemElement):
     '''
     Tree-view on documentation items
     '''
@@ -321,11 +321,7 @@ class ItemTree(ItemElement):
         self.replace_self(top_node)
 
 
-# -----------------------------------------------------------------------------
-# Pending item cross reference node
-
-
-class PendingItemXref(nodes.Inline, nodes.Element):
+class PendingItemXref(nodes.Inline, ItemElement):
     """
     Node for item cross-references that cannot be resolved without
     complete information about all documents.
