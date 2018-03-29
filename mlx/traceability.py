@@ -197,9 +197,56 @@ class ItemMatrix(ItemElement):
         self.replace_self(top_node)
 
 
-class Item2DMatrix(nodes.General, nodes.Element):
-    '''Matrix for cross referencing documentation items in 2 dimensions'''
-    pass
+class Item2DMatrix(ItemElement):
+    '''
+    Matrix for cross referencing documentation items in 2 dimensions
+
+    Create table with related items, printing their target references.
+    Only source and target items matching respective regexp shall be included
+    '''
+
+    def perform_traceability_replacement(self, app, collection):
+        '''
+        Perform the node replacement
+
+        Args:
+            - app: sphinx application object to use
+            - collection (TraceableCollection): Collection for which to generate the nodes
+        '''
+        source_ids = collection.get_items(self['source'])
+        target_ids = collection.get_items(self['target'])
+        top_node = self.create_top_node(self['title'])
+        table = nodes.table()
+        tgroup = nodes.tgroup()
+        colspecs = [nodes.colspec(colwidth=5)]
+        hrow = nodes.row('', nodes.entry('', nodes.paragraph('', '')))
+        for source_id in source_ids:
+            colspecs.append(nodes.colspec(colwidth=5))
+            src_cell = make_internal_item_ref(app, self, self['document'], source_id, False)
+            hrow.append(nodes.entry('', src_cell))
+        tgroup += colspecs
+        tgroup += nodes.thead('', hrow)
+        tbody = nodes.tbody()
+        for target_id in target_ids:
+            row = nodes.row()
+            tgt_cell = nodes.entry()
+            tgt_cell += make_internal_item_ref(app, self, self['document'], target_id, False)
+            row += tgt_cell
+            for source_id in source_ids:
+                cell = nodes.entry()
+                p_node = nodes.paragraph()
+                if collection.are_related(source_id, self['type'], target_id):
+                    txt = self['hit']
+                else:
+                    txt = self['miss']
+                p_node += nodes.Text(txt)
+                cell += p_node
+                row += cell
+            tbody += row
+        tgroup += tbody
+        table += tgroup
+        top_node += table
+        self.replace_self(top_node)
 
 
 class ItemTree(ItemElement):
@@ -510,7 +557,9 @@ class Item2DMatrixDirective(Directive):
     def run(self):
         env = self.state.document.settings.env
 
-        node = Item2DMatrix('')
+        node = Item2DMatrix()
+        node['document'] = env.docname
+        node['line'] = self.lineno
 
         # Process title (optional argument)
         if len(self.arguments) > 0:
@@ -684,44 +733,8 @@ def process_item_nodes(app, doctree, fromdocname):
     for node in doctree.traverse(ItemMatrix):
         node.perform_traceability_replacement(app, env.traceability_collection)
 
-    # Item 2D matrix:
-    # Create table with related items, printing their target references.
-    # Only source and target items matching respective regexp shall be included
     for node in doctree.traverse(Item2DMatrix):
-        source_ids = env.traceability_collection.get_items(node['source'])
-        target_ids = env.traceability_collection.get_items(node['target'])
-        top_node = create_top_node(node['title'])
-        table = nodes.table()
-        tgroup = nodes.tgroup()
-        colspecs = [nodes.colspec(colwidth=5)]
-        hrow = nodes.row('', nodes.entry('', nodes.paragraph('', '')))
-        for source_id in source_ids:
-            colspecs.append(nodes.colspec(colwidth=5))
-            src_cell = make_internal_item_ref(app, node, fromdocname, source_id, False)
-            hrow.append(nodes.entry('', src_cell))
-        tgroup += colspecs
-        tgroup += nodes.thead('', hrow)
-        tbody = nodes.tbody()
-        for target_id in target_ids:
-            row = nodes.row()
-            tgt_cell = nodes.entry()
-            tgt_cell += make_internal_item_ref(app, node, fromdocname, target_id, False)
-            row += tgt_cell
-            for source_id in source_ids:
-                cell = nodes.entry()
-                p_node = nodes.paragraph()
-                if env.traceability_collection.are_related(source_id, node['type'], target_id):
-                    txt = node['hit']
-                else:
-                    txt = node['miss']
-                p_node += nodes.Text(txt)
-                cell += p_node
-                row += cell
-            tbody += row
-        tgroup += tbody
-        table += tgroup
-        top_node += table
-        node.replace_self(top_node)
+        node.perform_traceability_replacement(app, env.traceability_collection)
 
     for node in doctree.traverse(ItemList):
         node.perform_traceability_replacement(app, env.traceability_collection)
