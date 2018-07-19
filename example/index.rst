@@ -89,10 +89,10 @@ This text is not part of any item
 
     Ai caramba, this should report a broken link to an non existing requirement.
 
-.. item:: r009 Requirement with invalid relation kind to other one
-    :non_existing_relation: r007
+.. item:: r009 Requirement with invalid relation kind or attribute
+    :non_existing_relation_or_attribute: r007
 
-    Ai caramba, this should report a warning as the relation kind does not exist.
+    Ai caramba, this should report a warning as the relation kind or attribute does not exist.
 
 Item list
 =========
